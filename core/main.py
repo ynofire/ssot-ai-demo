@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from . import gemini
 from .chat import run_chat
 from .config import (CHAT_PER_DAY, CHAT_PER_IP_PER_MIN, GEMINI_API_KEY, GEMINI_MODEL, LLM_PROVIDER, MODEL, NUM_CTX,
                      OLLAMA_URL, READ_ONLY, TODAY, VERTICAL, VERTICAL_PKG, VERTICAL_WEB_DIR, WEB_DIR, vertical)
@@ -94,7 +95,7 @@ class ChatRequest(BaseModel):
 @app.get("/api/health")
 def health():
     if LLM_PROVIDER == "gemini":     # 30초마다 호출되므로 외부 API 를 부르지 않고 키 설정 여부만 본다
-        return {"ok": bool(GEMINI_API_KEY), "model": GEMINI_MODEL, "today": TODAY.isoformat()}
+        return {"ok": bool(GEMINI_API_KEY), "model": GEMINI_MODEL, "thinking": gemini._think, "today": TODAY.isoformat()}
     try:
         tags = httpx.get(f"{OLLAMA_URL}/api/tags", timeout=3).json()
         loaded = any(m["name"] == MODEL for m in tags.get("models", []))

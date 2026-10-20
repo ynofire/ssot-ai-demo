@@ -1,9 +1,11 @@
 """Google AI Studio(Gemini) generateContent 어댑터. chat.py 의 내부 메시지 형식(Ollama 식)과 Gemini 형식을 서로 바꾼다."""
 import json
+import time
 
-from .config import GEMINI_API_KEY, GEMINI_MODEL, TEMPERATURE
+from .config import GEMINI_API_KEY, GEMINI_MODEL, GEMINI_THINKING, TEMPERATURE
 
 URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+_think = json.loads(GEMINI_THINKING) if GEMINI_THINKING else None   # 모델이 거부하면 None 으로 바뀐다
 
 
 def _decl(schema):
@@ -60,7 +62,20 @@ def from_response(data):
 
 
 def chat(client, messages, schemas):
-    r = client.post(URL.format(model=GEMINI_MODEL), json=to_request(messages, schemas, TEMPERATURE),
-                    headers={"x-goog-api-key": GEMINI_API_KEY})   # 키는 헤더로만 보낸다 (URL 에 넣으면 오류 메시지로 새 수 있다)
+    global _think
+    body = to_request(messages, schemas, TEMPERATURE)
+    send = lambda: client.post(URL.format(model=GEMINI_MODEL), json=body,   # noqa: E731
+                               headers={"x-goog-api-key": GEMINI_API_KEY})  # 키는 헤더로만 (URL 에 넣으면 오류 메시지로 새 수 있다)
+    if _think:
+        body["generationConfig"]["thinkingConfig"] = _think
+    t = time.time()
+    r = send()
+    if r.status_code == 400 and _think and "think" in r.text.lower():       # 이 모델이 생각 설정을 거부하면 빼고 다시 보낸다
+        print(f"[gemini] thinkingConfig 거부됨, 설정 없이 재시도: {r.text[:200]}", flush=True)
+        _think = None
+        body["generationConfig"].pop("thinkingConfig")
+        r = send()
     r.raise_for_status()
-    return from_response(r.json())
+    data = r.json()
+    print(f"[gemini] {time.time() - t:.1f}s model={GEMINI_MODEL} usage={data.get('usageMetadata')}", flush=True)   # 호출별 시간·토큰 (키는 포함되지 않음)
+    return from_response(data)

@@ -148,3 +148,54 @@ def test_health_does_not_call_external_api_for_gemini(client, monkeypatch):
     assert client.get("/api/health").json()["ok"] is False           # 키가 없으면 '미연결'
     monkeypatch.setattr(main, "GEMINI_API_KEY", "k")
     assert client.get("/api/health").json()["ok"] is True
+
+
+# ------------------------------------------------------------- 생각 설정
+class _Resp:
+    def __init__(self, status, body):
+        self.status_code, self._body, self.text = status, body, json.dumps(body)
+
+    def json(self):
+        return self._body
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise RuntimeError(self.status_code)
+
+
+class _Client:
+    def __init__(self, *responses):
+        self.responses, self.bodies = list(responses), []
+
+    def post(self, url, json, headers):
+        self.bodies.append(json)
+        return self.responses.pop(0)
+
+
+OK = {"candidates": [{"content": {"parts": [{"text": "답"}]}}], "usageMetadata": {"thoughtsTokenCount": 0}}
+MSG = [{"role": "user", "content": "q"}]
+
+
+def test_thinking_config_is_sent_by_default(monkeypatch):
+    monkeypatch.setattr(gemini, "_think", {"thinkingBudget": 0})
+    c = _Client(_Resp(200, OK))
+    assert gemini.chat(c, MSG, chat.SCHEMAS)["content"] == "답"
+    assert c.bodies[0]["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 0}
+
+
+def test_model_that_rejects_thinking_config_gets_retried_without_it(monkeypatch):
+    monkeypatch.setattr(gemini, "_think", {"thinkingBudget": 0})
+    c = _Client(_Resp(400, {"error": {"message": "thinking_budget is not supported for this model"}}), _Resp(200, OK))
+    assert gemini.chat(c, MSG, chat.SCHEMAS)["content"] == "답"
+    assert "thinkingConfig" not in c.bodies[1]["generationConfig"] and gemini._think is None    # 이후 호출에도 보내지 않는다
+    c2 = _Client(_Resp(200, OK))
+    gemini.chat(c2, MSG, chat.SCHEMAS)
+    assert "thinkingConfig" not in c2.bodies[0]["generationConfig"]
+
+
+def test_unrelated_400_is_not_swallowed(monkeypatch):
+    monkeypatch.setattr(gemini, "_think", {"thinkingBudget": 0})
+    c = _Client(_Resp(400, {"error": {"message": "Invalid JSON payload"}}))
+    with pytest.raises(RuntimeError):
+        gemini.chat(c, MSG, chat.SCHEMAS)
+    assert gemini._think == {"thinkingBudget": 0} and len(c.bodies) == 1                       # 재시도하지도, 설정을 끄지도 않는다
