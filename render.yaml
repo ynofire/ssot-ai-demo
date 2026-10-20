@@ -1,0 +1,23 @@
+# Render Blueprint: 저장소를 연결하면 이 파일대로 웹 서비스를 만든다.
+# GEMINI_API_KEY 는 값이 비어 있어서 배포 화면에서 직접 입력해야 한다 (저장소에 키를 넣지 않는다).
+services:
+  - type: web
+    name: ssot-ai-demo
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn core.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: VERTICAL
+        value: sme_retail
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: READ_ONLY
+        value: "1"
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: GEMINI_API_KEY
+        sync: false

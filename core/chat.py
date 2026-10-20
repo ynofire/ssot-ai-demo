@@ -9,8 +9,9 @@ import time
 
 import httpx
 
-from .config import (LLM_TIMEOUT, MAX_TOOL_RESULT_CHARS, MAX_TOOL_ROUNDS, MODEL, NUM_CTX, OLLAMA_URL, TEMPERATURE,
-                     VERTICAL_PKG)
+from . import gemini
+from .config import (LLM_PROVIDER, LLM_TIMEOUT, MAX_TOOL_RESULT_CHARS, MAX_TOOL_ROUNDS, MODEL, NUM_CTX, OLLAMA_URL,
+                     TEMPERATURE, VERTICAL_PKG)
 from .permissions import check_role
 
 # 시스템 프롬프트와 tool 은 업종 패키지가 정한다
@@ -53,6 +54,8 @@ def _system(role):
 
 
 def _llm(client, messages):
+    if LLM_PROVIDER == "gemini":
+        return gemini.chat(client, messages, SCHEMAS)
     # Ollama 고유 API(/api/chat)를 쓴다. OpenAI 호환 경로(/v1/chat/completions)는 options.num_ctx를
     # 조용히 무시하고 Ollama가 하드웨어에 맞춰 컨텍스트 길이를 자체 선택한다 — 개발 PC(8GB GPU)는
     # 32768을 골라 문제가 없었지만, 통합메모리를 쓰는 맥북처럼 더 보수적으로 고르는 환경에서는 작은
@@ -71,7 +74,7 @@ def run_chat(role, message, history=None):
     messages = [{"role": "system", "content": _system(role)}]
     for h in (history or [])[-6:]:
         if h.get("role") in ("user", "assistant") and h.get("content"):
-            messages.append({"role": h["role"], "content": str(h["content"])})
+            messages.append({"role": h["role"], "content": str(h["content"])[:2000]})   # 공개 엔드포인트: 이력 하나가 비정상적으로 길어도 잘라낸다
     messages.append({"role": "user", "content": message})
 
     yield {"type": "stage", "step": "analyze", "label": "질문을 분석하고 있어요", "pct": _ESTIMATE["analyze"]}
@@ -121,8 +124,13 @@ def run_chat(role, message, history=None):
                     messages.append({"role": "tool", "tool_call_id": c.get("id", ""), "content": text})
                 yield {"type": "stage", "step": "write", "label": "답변을 작성하고 있어요", "pct": _ESTIMATE["answer"]}
         yield {"type": "error", "message": "조회가 너무 길어져 중단했어요. 질문을 조금 더 구체적으로 해주세요."}
+    except httpx.HTTPStatusError as e:
+        print(f"[llm] HTTP {e.response.status_code}: {e.response.text[:300]}")   # 서버 로그에만 남긴다 (키는 헤더라 포함되지 않음)
+        yield {"type": "error", "message": "요청이 몰려 AI가 잠시 쉬고 있어요. 잠시 후 다시 시도해 주세요."
+               if e.response.status_code == 429 else f"AI 서비스 호출에 실패했어요 (HTTP {e.response.status_code})."}
     except httpx.HTTPError as e:
-        yield {"type": "error", "message": f"AI 모델 서버에 연결하지 못했어요 ({type(e).__name__}). Ollama가 실행 중인지 확인해 주세요."}
+        yield {"type": "error", "message": f"AI 모델 서버에 연결하지 못했어요 ({type(e).__name__})."
+               + (" Ollama가 실행 중인지 확인해 주세요." if LLM_PROVIDER == "ollama" else "")}
 
 
 def ask(role, message, history=None):

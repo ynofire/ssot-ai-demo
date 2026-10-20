@@ -776,6 +776,7 @@ async function checkHealth() {
   state.layout = loadLayout();
   try {
     const cfg = state.cfg = await api("/api/config");
+    if (cfg.read_only) $("#open-forms").hidden = true;      // 공개 데모: 쓰기 API 가 서버에서도 막혀 있다
     document.title = cfg.title; $("#brand-title").textContent = cfg.title; $("#brand-sub").textContent = cfg.subtitle;
     $("#role").innerHTML = cfg.roles.map(r => `<option>${esc(r)}</option>`).join(""); state.role = cfg.roles[0];
     $("#log-filter").innerHTML = '<option value="">전체</option>' + Object.entries(TABLE_KO).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");

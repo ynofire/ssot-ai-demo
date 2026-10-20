@@ -31,3 +31,14 @@ NUM_CTX = int(os.environ.get("NUM_CTX", "16384"))
 LLM_TIMEOUT = 300
 MAX_TOOL_ROUNDS = 4
 MAX_TOOL_RESULT_CHARS = 6000
+
+# ---- 공개 데모용 (모두 환경변수. 기본값은 로컬 Ollama 그대로라 기존 동작은 바뀌지 않는다)
+# LLM_PROVIDER=gemini 이면 Google AI Studio(Gemini API)를 쓴다. 키는 서버 환경변수로만 받는다 (저장소·프론트에 두지 않는다).
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+# READ_ONLY=1 이면 /api/chat 외의 쓰기 요청(POST·PATCH 등)을 전부 막고 프론트의 입력 버튼을 숨긴다.
+READ_ONLY = os.environ.get("READ_ONLY", "") == "1"
+# 공개 링크에서 Gemini 무료 할당량이 바닥나지 않도록 채팅 횟수를 제한한다 (질문 1개 = 모델 호출 2~3회).
+CHAT_PER_IP_PER_MIN = int(os.environ.get("CHAT_PER_IP_PER_MIN", "5"))
+CHAT_PER_DAY = int(os.environ.get("CHAT_PER_DAY", "150"))

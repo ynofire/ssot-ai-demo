@@ -15,8 +15,10 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .chat import run_chat
-from .config import MODEL, NUM_CTX, OLLAMA_URL, TODAY, VERTICAL, VERTICAL_PKG, VERTICAL_WEB_DIR, WEB_DIR, vertical
+from .config import (CHAT_PER_DAY, CHAT_PER_IP_PER_MIN, GEMINI_API_KEY, GEMINI_MODEL, LLM_PROVIDER, MODEL, NUM_CTX,
+                     OLLAMA_URL, READ_ONLY, TODAY, VERTICAL, VERTICAL_PKG, VERTICAL_WEB_DIR, WEB_DIR, vertical)
 from .db import connect
+from .main_helpers import ChatLimiter
 from .main_helpers import role as _role
 from .permissions import PERMISSIONS, ROLES, PermissionDenied
 from .validation import NotFound, ValidationFailed
@@ -35,11 +37,20 @@ def _warmup():
 
 @asynccontextmanager
 async def lifespan(_):
-    threading.Thread(target=_warmup, daemon=True).start()
+    if LLM_PROVIDER == "ollama":
+        threading.Thread(target=_warmup, daemon=True).start()
     yield
 
 
 app = FastAPI(title="SSOT AI 컨설팅 프로토타입", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def _read_only(request: Request, call_next):
+    """공개 데모: 채팅 외의 쓰기 요청(POST·PATCH·PUT·DELETE)을 전부 막는다."""
+    if READ_ONLY and request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path != "/api/chat":
+        return JSONResponse(status_code=403, content={"error": "공개 데모는 읽기 전용이에요. 데이터 입력은 로컬 버전에서 시연해요."})
+    return await call_next(request)
 
 
 @app.middleware("http")
@@ -77,11 +88,13 @@ async def _not_found(_: Request, exc: NotFound):
 class ChatRequest(BaseModel):
     role: str
     message: str = Field(min_length=1, max_length=1000)
-    history: list[dict] = []
+    history: list[dict] = Field(default=[], max_length=12)
 
 
 @app.get("/api/health")
 def health():
+    if LLM_PROVIDER == "gemini":     # 30초마다 호출되므로 외부 API 를 부르지 않고 키 설정 여부만 본다
+        return {"ok": bool(GEMINI_API_KEY), "model": GEMINI_MODEL, "today": TODAY.isoformat()}
     try:
         tags = httpx.get(f"{OLLAMA_URL}/api/tags", timeout=3).json()
         loaded = any(m["name"] == MODEL for m in tags.get("models", []))
@@ -98,7 +111,7 @@ def roles():
 @app.get("/api/config")
 def config():
     """프론트 셸이 그리는 업종 표시 문구."""
-    return {"vertical": VERTICAL, "roles": ROLES, **vertical.DISPLAY}
+    return {"vertical": VERTICAL, "roles": ROLES, "read_only": READ_ONLY, **vertical.DISPLAY}
 
 
 @app.get("/api/change-log")
@@ -118,12 +131,19 @@ def change_log(limit: int = Query(50, ge=1, le=200), table_name: str | None = No
     return {"logs": [dict(r) for r in rows]}
 
 
+_limiter = ChatLimiter(CHAT_PER_IP_PER_MIN, CHAT_PER_DAY)
+
+
 @app.post("/api/chat")
-def chat(req: ChatRequest):
+def chat(req: ChatRequest, request: Request):
     role = _role(req.role)
+    # ponytail: 프록시 뒤라 첫 X-Forwarded-For 를 쓴다. 헤더를 위조하면 IP별 제한은 피할 수 있지만 일일 전체 한도는 남는다.
+    ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (request.client.host if request.client else "?")
+    refused = _limiter.allow(ip) if LLM_PROVIDER == "gemini" else None   # 로컬 Ollama 는 제한하지 않는다
 
     def stream():
-        for ev in run_chat(role, req.message, req.history):
+        events = [{"type": "error", "message": refused}] if refused else run_chat(role, req.message, req.history)
+        for ev in events:
             yield f"event: {ev['type']}\ndata: {json.dumps(ev, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream",
