@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SSOT AI 대시보드</title>
+<style>
+:root{
+  --bg:#f4f5f7; --card:#fff; --ink:#15181e; --muted:#5d6675; --line:#e3e6eb; --line-strong:#cfd4dc;
+  --accent:#2457d6; --accent-soft:#e8eefc; --last:#8b94a3; --good:#0f7b4f; --good-soft:#e2f5ec;
+  --warn:#a15c00; --warn-soft:#fdf0d9; --bad:#b42318; --bad-soft:#fde8e6;
+  --radius:12px; --shadow:0 1px 2px rgba(16,24,40,.05),0 1px 3px rgba(16,24,40,.06);
+  --font:"Pretendard","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--font);}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none !important}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* header */
+header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.bar{padding:10px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:16px;letter-spacing:-.01em;margin-right:4px}
+.brand small{display:block;font-weight:400;font-size:12px;color:var(--muted);letter-spacing:0}
+.tab{border:0;background:transparent;padding:8px 14px;border-radius:8px;color:var(--muted);font-weight:600}
+.tab:hover{background:var(--bg)}
+.tab[aria-selected=true]{background:var(--accent-soft);color:var(--accent)}
+.spacer{flex:1}
+.role{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+select,input[type=text],input[type=date]{border:1px solid var(--line-strong);background:#fff;border-radius:8px;padding:8px 10px;min-height:38px;width:100%}
+.role select{width:auto;font-weight:600;color:var(--ink)}
+.btn{border:1px solid var(--line-strong);background:#fff;border-radius:8px;padding:8px 14px;font-weight:600;min-height:38px}
+.btn:hover{background:var(--bg)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#1c47b3}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--last);display:inline-block}
+.dot.ok{background:var(--good)} .dot.bad{background:var(--bad)}
+
+main{padding:20px 24px}
+section[hidden]{display:none}
+h2{font-size:15px;margin:0 0 12px;letter-spacing:-.01em}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px}
+.grid{display:grid;gap:16px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:16px}
+.kpi .label{font-size:13px;color:var(--muted)}
+.kpi .value{font-size:26px;font-weight:700;letter-spacing:-.02em;margin:2px 0}
+.kpi .sub{font-size:13px;color:var(--muted)}
+.up{color:var(--good)} .down{color:var(--bad)}
+.charts{grid-template-columns:repeat(auto-fit,minmax(360px,1fr))}
+.chart-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:6px}
+.chart-head h2{margin:0}
+.legend{display:flex;gap:12px;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:18px;height:0;border-top:2.5px solid var(--accent);vertical-align:middle;margin-right:5px}
+.legend i.dash{border-top:2px dashed var(--last)}
+.chart{position:relative}
+.chart svg{display:block}
+.tip{position:absolute;pointer-events:none;background:#15181e;color:#fff;border-radius:8px;padding:8px 10px;font-size:12.5px;line-height:1.5;white-space:nowrap;z-index:5;transform:translateX(-50%);opacity:0;transition:opacity .08s}
+.tip b{display:block;margin-bottom:2px}
+.board{position:relative;min-height:200px}
+.box{position:absolute;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden;transition:left .2s ease,top .2s ease,width .2s ease,height .2s ease}
+.box.active{transition:none;z-index:30;box-shadow:0 12px 32px rgba(16,24,40,.22);cursor:grabbing}
+.ph{position:absolute;border:2px dashed var(--accent);background:rgba(36,87,214,.07);border-radius:12px;pointer-events:none;transition:left .12s,top .12s,width .12s,height .12s;z-index:1}
+.chart-head,.mhead{cursor:grab}
+.box.active .chart-head,.box.active .mhead{cursor:grabbing}
+.grip,.rz{touch-action:none}
+.box[data-kind=kpi] .rz{cursor:ew-resize}
+@media (prefers-reduced-motion:reduce){.box,.ph{transition:none}}
+.box .body{flex:1;min-height:0;overflow:auto}
+.box .chart{flex:1;min-height:0;overflow:hidden}
+.ttl{display:flex;align-items:center;gap:6px;min-width:0}
+.grip{border:0;background:transparent;color:#9aa3b2;cursor:grab;font-size:15px;letter-spacing:-2px;padding:2px 6px;border-radius:6px;line-height:1;flex:none}
+.grip:hover,.grip:focus-visible{background:var(--bg);color:var(--ink)}
+.grip:active{cursor:grabbing}
+.kpi .grip,.box[data-kind=kpi]>.grip{position:absolute;top:8px;right:8px}
+.box>.grip{position:absolute;top:8px;right:8px}
+.rz{position:absolute;right:3px;bottom:3px;width:16px;height:16px;cursor:nwse-resize;touch-action:none;opacity:.45;
+  background:linear-gradient(135deg,transparent 50%,#8b94a3 50%,#8b94a3 58%,transparent 58%,transparent 72%,#8b94a3 72%,#8b94a3 80%,transparent 80%)}
+.box:hover .rz{opacity:1}
+.hint2{font-size:12px;color:var(--muted)}
+.mhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 30px 12px 0;flex-wrap:wrap}
+.mtitle b{font-size:15px}.mmonth{color:var(--muted);font-size:13px;margin-left:4px}
+.kbody{container-type:inline-size}
+.mgrid{display:grid;grid-template-columns:repeat(var(--n,4),minmax(0,1fr));gap:14px 18px}
+@container (max-width:654px){.mgrid[data-n="4"]{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container (max-width:420px){.mgrid[data-n="3"]{grid-template-columns:minmax(0,1fr)}}
+@container (max-width:250px){.mgrid[data-n]{grid-template-columns:minmax(0,1fr)}}
+.metric .label{font-size:12.5px;color:var(--muted)}
+.metric .value{font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.3}
+.metric .sub{font-size:12px;color:var(--muted);line-height:1.5}
+.neutral{color:var(--muted)}
+.chip.closed{background:var(--bg)}
+.chip.live{background:var(--good-soft);color:var(--good);border-color:transparent;display:inline-flex;align-items:center;gap:6px}
+.pulse{width:7px;height:7px;border-radius:50%;background:var(--good);display:inline-block;animation:pulse 1.6s infinite}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.pulse{animation:none}}
+.box .log{max-height:none}
+@media (max-width:900px){.rz,.grip{display:none}.hint2{display:none}.chart-head,.mhead{cursor:default}}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-weight:600;color:var(--muted);text-align:left;font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;font-size:12px;font-weight:600;border-radius:999px;padding:2px 9px}
+.badge.ok{background:var(--good-soft);color:var(--good)}
+.badge.low{background:var(--warn-soft);color:var(--warn)}
+.badge.role{background:var(--accent-soft);color:var(--accent)}
+.stock{position:relative;height:8px;background:#eceff3;border-radius:4px;min-width:90px}
+.stock i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:4px}
+.stock i.low{background:#d98a00}
+.stock b{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.55}
+.log{list-style:none;margin:0;padding:0;max-height:430px;overflow:auto}
+.log li{padding:10px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.log li:last-child{border:0}
+.log .meta{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:12px;margin-bottom:2px}
+.log .chg{color:var(--ink)}
+.log .chg s{color:var(--muted)}
+.notice{background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:8px 12px;font-size:13px}
+.empty{color:var(--muted);text-align:center;padding:26px 0;font-size:14px}
+
+/* chat */
+.chat-body{flex:1;min-height:0;display:flex;flex-direction:column}
+.msgs{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0;overflow:auto;padding:4px 2px 10px}
+.msg{max-width:94%;padding:12px 15px;border-radius:14px;line-height:1.65;word-break:keep-all;overflow-wrap:anywhere}
+.msg.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.msg.ai{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:4px;box-shadow:var(--shadow)}
+.msg p{margin:0 0 8px} .msg p:last-child{margin:0}
+.msg ul,.msg ol{margin:4px 0 8px;padding-left:20px}
+.msg li{margin:2px 0}
+.msg h4{margin:10px 0 4px;font-size:14.5px}
+.msg .tbl{overflow:auto;margin:6px 0 10px}
+.msg table{font-size:13px}
+.msg th,.msg td{padding:6px 10px;border:1px solid var(--line);white-space:nowrap}
+.msg th{background:var(--bg)}
+.msg code{background:var(--bg);padding:0 4px;border-radius:4px}
+.msg .foot{margin-top:10px;padding-top:8px;border-top:1px dashed var(--line);font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip{background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:1px 9px;font-size:12px;color:var(--muted)}
+.chip.denied{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+.msg.err{background:var(--bad-soft);border-color:transparent;color:var(--bad)}
+.suggest{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+.suggest button{border:1px solid var(--line-strong);background:#fff;border-radius:999px;padding:5px 12px;font-size:13px}
+.suggest button:hover{background:var(--accent-soft);border-color:var(--accent)}
+.composer{padding-top:10px;border-top:1px solid var(--line)}
+.composer form{display:flex;gap:8px}
+.composer input{flex:1;min-height:42px;border-radius:10px;padding:0 12px;min-width:0}
+.composer .btn{min-height:42px;border-radius:10px;padding:0 16px;white-space:nowrap}
+.progress{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;align-self:flex-start;width:min(520px,100%);box-shadow:var(--shadow)}
+.track{height:8px;background:#e8ebf0;border-radius:4px;overflow:hidden}
+.fill{height:100%;width:0;background:linear-gradient(90deg,#2457d6,#4a7cf0);border-radius:4px;transition:width .35s ease}
+.pmeta{display:flex;justify-content:space-between;gap:10px;font-size:13px;margin-bottom:8px}
+.pmeta .lab{font-weight:600}
+.pmeta .el{color:var(--muted);font-variant-numeric:tabular-nums}
+.steps{display:flex;gap:6px;margin-top:10px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.steps span{padding:2px 9px;border-radius:999px;background:var(--bg)}
+.steps span.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.steps span.done{background:var(--good-soft);color:var(--good)}
+.tools-done{font-size:12px;color:var(--muted);margin-top:8px}
+
+/* drawer + modal */
+.scrim{position:fixed;inset:0;background:rgba(16,24,40,.38);z-index:40}
+.scrim[hidden],.drawer[hidden],.modal[hidden]{display:none}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100%);background:var(--card);z-index:50;box-shadow:-8px 0 30px rgba(16,24,40,.18);display:flex;flex-direction:column}
+.drawer header,.modal header{position:static;border:0;background:none;backdrop-filter:none;display:flex;align-items:center;justify-content:space-between;padding:16px 20px 8px}
+.drawer h2,.modal h2{font-size:17px;margin:0}
+.x{border:0;background:transparent;font-size:22px;line-height:1;padding:6px 10px;border-radius:8px;color:var(--muted)}
+.x:hover{background:var(--bg)}
+.ftabs{display:flex;gap:2px;padding:0 14px;border-bottom:1px solid var(--line);overflow-x:auto}
+.ftab{border:0;background:transparent;padding:10px 12px;color:var(--muted);font-weight:600;font-size:14px;border-bottom:2px solid transparent;white-space:nowrap}
+.ftab[aria-selected=true]{color:var(--accent);border-color:var(--accent)}
+.ftab:disabled{opacity:.45;cursor:not-allowed}
+.fbody{padding:18px 20px 28px;overflow:auto;flex:1}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;font-weight:600;margin-bottom:5px}
+.field .hint{font-size:12px;color:var(--muted);margin-top:4px}
+.field .err{font-size:12.5px;color:var(--bad);margin-top:4px;min-height:0}
+.field.invalid input,.field.invalid select{border-color:var(--bad);background:#fffafa}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.summary{background:var(--bg);border-radius:10px;padding:10px 12px;font-size:13.5px;margin-bottom:14px}
+.summary div{display:flex;justify-content:space-between;gap:12px}
+.formerr{background:var(--bad-soft);color:var(--bad);border-radius:8px;padding:9px 12px;font-size:13.5px;margin-bottom:14px}
+.actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.pick{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin-bottom:14px}
+.pick tr{cursor:pointer}
+.pick tr:hover td{background:var(--bg)}
+.pick tr.sel td{background:var(--accent-soft)}
+.toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);background:#15181e;color:#fff;padding:11px 18px;border-radius:10px;z-index:90;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.25);max-width:92vw}
+.modal{position:fixed;inset:5vh 0 auto 0;margin:0 auto;width:min(760px,94vw);max-height:90vh;background:var(--card);border-radius:14px;z-index:50;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(16,24,40,.3)}
+.modal .mb{padding:0 20px 20px;overflow:auto}
+.toolbar{display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.toolbar select{width:auto}
+.year-nav{display:inline-flex;align-items:center;gap:8px}
+.year-nav .btn{min-height:32px;padding:2px 10px}
+.year-nav b{text-align:center;font-size:14px;white-space:nowrap}
+.log.ev .ev-year{position:sticky;top:0;background:var(--card);font-weight:700;font-size:12.5px;color:var(--muted);padding:8px 0 4px;z-index:1}
+.log.ev .ev-year.on{color:var(--accent)}
+.footnote{position:fixed;left:0;right:0;bottom:0;z-index:15;background:rgba(255,255,255,.96);border-top:1px solid var(--line);color:var(--muted);font-size:12.5px;padding:7px 24px;text-align:center}
+body.has-footnote main{padding-bottom:52px}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="brand"><span id="brand-title"></span><small id="brand-sub"></small></div>
+    <div class="spacer"></div>
+    <span class="role" title="AI 모델 연결 상태"><span class="dot" id="health"></span><span id="health-text">확인 중</span></span>
+    <label class="role">역할
+      <select id="role" aria-label="역할 선택"></select>
+    </label>
+    <button class="btn primary" id="open-forms">데이터 입력</button>
+  </div>
+</header>
+
+<main>
+  <!-- ============ 대시보드 ============ -->
+  <section id="view-dash">
+    <div class="toolbar">
+      <label style="font-size:13px;color:var(--muted)">비교 기준
+        <select id="year" style="margin-left:6px"></select>
+      </label>
+      <span id="partial-note" class="chip"></span>
+      <span class="spacer"></span>
+      <span class="hint2">카드 제목줄을 끌어 원하는 곳에 놓고, 오른쪽 아래 모서리를 끌어 크기를 바꿀 수 있어요</span>
+      <button class="btn" id="layout-reset" type="button" style="min-height:34px;padding:4px 12px">레이아웃 초기화</button>
+    </div>
+    <div class="board" id="board"></div>
+  </section>
+
+</main>
+
+<!-- ============ 입력 서랍 ============ -->
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+  <header><h2 id="drawer-title">데이터 입력</h2><button class="x" id="close-forms" aria-label="닫기">&times;</button></header>
+  <div class="ftabs" role="tablist" id="ftabs"></div>
+  <div class="fbody" id="fbody"></div>
+</aside>
+
+<!-- ============ 변경이력 모달 ============ -->
+<div class="modal" id="log-modal" hidden role="dialog" aria-modal="true" aria-labelledby="log-title">
+  <header><h2 id="log-title">전체 변경이력</h2><button class="x" id="close-log" aria-label="닫기">&times;</button></header>
+  <div class="mb">
+    <div class="toolbar"><select id="log-filter" aria-label="대상 필터">
+      </select>
+      <span id="log-extra" hidden><select id="log-role" aria-label="수정한 역할"></select>
+      <input id="log-from" type="date" aria-label="시작일" style="width:auto"> ~ <input id="log-to" type="date" aria-label="종료일" style="width:auto"></span>
+      <span class="chip" id="log-count"></span></div>
+    <ul class="log" id="log-full" style="max-height:60vh"></ul>
+  </div>
+</div>
+<div class="toast" id="toast" hidden role="status"></div>
+<footer class="footnote" id="footnote" hidden></footer>
+
+<script>
+"use strict";
+/* ------------------------------------------------------------------ 공통 */
+const $ = (s, r = document) => r.querySelector(s);
+const el = (tag, attrs = {}, html = "") => { const e = document.createElement(tag); Object.entries(attrs).forEach(([k, v]) => e.setAttribute(k, v)); e.innerHTML = html; return e; };
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const won = n => Math.round(n).toLocaleString("ko-KR") + "원";
+const man = n => Math.round(n / 1e4).toLocaleString("ko-KR") + "만원";
+const short = n => { const a = Math.abs(n); const s = n < 0 ? "-" : ""; return a >= 1e8 ? s + (a / 1e8).toFixed(1) + "억" : s + Math.round(a / 1e4).toLocaleString("ko-KR") + "만"; };
+
+const state = { role: null, cfg: null, dash: null, lookups: null, year: null, chatBusy: false, history: [], abort: null };
+
+async function api(path, { method = "GET", body } = {}) {
+  const r = await fetch(path, { method, headers: body ? { "Content-Type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined });
+  let data = null; try { data = await r.json(); } catch { /* 본문 없음 */ }
+  if (!r.ok) { const e = new Error(data?.error || "요청에 실패했어요"); e.status = r.status; e.errors = data?.errors; throw e; }
+  return data;
+}
+let toastTimer;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 3200); }
+
+/* ------------------------------------------------------------------ 탭 */
+/* ------------------------------------------------------------------ 라인 차트 (의존성 없는 SVG)
+   카드의 실제 픽셀 크기로 그려서 카드가 커져도 글씨가 작아지지 않는다. 크기가 바뀌면 ResizeObserver 가 다시 그린다. */
+/* series: [{ pts: [{v, partial, label}] x12, color, dash }] 그리는 순서대로. 툴팁은 역순(마지막에 그린 선이 먼저)으로 보여준다.
+   thisSeries/lastSeries 만 주면 올해(실선 파랑)·작년(점선 회색) 두 줄로 그린다. */
+function lineChart(host, { thisSeries, lastSeries, series, fmt, tipFmt, zero = true }) {
+  const W = host.clientWidth, H = host.clientHeight;
+  if (W < 160 || H < 120) return;                       // 숨겨진 탭 등: 보이게 되면 ResizeObserver 가 다시 그린다
+  host.innerHTML = "";
+  series = series || [{ pts: lastSeries, color: "#8b94a3", dash: true }, { pts: thisSeries, color: "#2457d6" }];
+  const m = { l: 58, r: 18, t: 16, b: 32 };
+  const vals = series.flatMap(s => s.pts).map(p => p.v).filter(v => v != null);
+  if (!vals.length) { host.innerHTML = '<div class="empty">표시할 데이터가 없어요</div>'; return; }
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (zero) { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
+  const span = hi - lo || 1; lo -= zero && lo < 0 ? span * .06 : 0; hi += span * .08;
+  const x = i => m.l + (W - m.l - m.r) * (i / 11), y = v => m.t + (H - m.t - m.b) * (1 - (v - lo) / (hi - lo));
+  let g = "";
+  const step = niceStep((hi - lo) / Math.max(3, Math.round((H - m.t - m.b) / 70)));
+  for (let t = Math.ceil(lo / step) * step; t <= hi; t += step) {
+    g += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="${t === 0 && lo < 0 ? "#9aa3b2" : "#e6e9ee"}"/><text x="${m.l - 10}" y="${y(t) + 4}" text-anchor="end" font-size="12" fill="#5d6675">${fmt(t)}</text>`;
+  }
+  for (let i = 0; i < 12; i++) g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" font-size="12" fill="#5d6675">${i + 1}월</text>`;
+  const path = (s, color, dash) => {
+    const segs = []; let cur = [];
+    s.forEach((p, i) => { if (p.v == null || p.partial) { if (cur.length) segs.push(cur); cur = []; } else cur.push([x(i), y(p.v)]); });
+    if (cur.length) segs.push(cur);
+    return segs.map(sg => `<path d="${sg.map((q, i) => (i ? "L" : "M") + q[0].toFixed(1) + " " + q[1].toFixed(1)).join(" ")}" fill="none" stroke="${color}" stroke-width="${dash ? 2 : 2.8}" ${dash ? 'stroke-dasharray="6 5"' : ""} stroke-linejoin="round" stroke-linecap="round"/>`).join("") +
+      s.map((p, i) => p.v == null ? "" : p.partial
+        ? `<circle cx="${x(i)}" cy="${y(p.v)}" r="5" fill="#fff" stroke="${color}" stroke-width="2.2"/>`
+        : dash ? "" : `<circle cx="${x(i)}" cy="${y(p.v)}" r="3.4" fill="${color}"/>`).join("");
+  };
+  g += series.map(s => path(s.pts, s.color, !!s.dash)).join("");
+  const hit = Array.from({ length: 12 }, (_, i) => `<rect data-i="${i}" x="${x(i) - (W - m.l - m.r) / 22}" y="${m.t}" width="${(W - m.l - m.r) / 11}" height="${H - m.t - m.b}" fill="transparent"/>`).join("");
+  host.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="월별 추이 차트">${g}<line class="cur" y1="${m.t}" y2="${H - m.b}" stroke="#2457d6" stroke-opacity=".25" style="display:none"/>${hit}</svg><div class="tip"></div>`;
+  const tip = $(".tip", host), cur = $(".cur", host);
+  host.querySelectorAll("rect[data-i]").forEach(r => {
+    r.onmouseenter = r.onmousemove = () => {
+      const i = +r.dataset.i;
+      tip.innerHTML = `<b>${i + 1}월</b>` + series.slice().reverse().map(s => { const a = s.pts[i]; return `${a.label}: ${a.v == null ? "-" : tipFmt(a.v)}${a.partial ? " (부분 월)" : ""}`; }).join("<br>");
+      tip.style.left = Math.min(Math.max(x(i), 80), W - 80) + "px"; tip.style.top = (m.t + 4) + "px"; tip.style.opacity = 1;
+      cur.setAttribute("x1", x(i)); cur.setAttribute("x2", x(i)); cur.style.display = "";
+    };
+    r.onmouseleave = () => { tip.style.opacity = 0; cur.style.display = "none"; };
+  });
+}
+function niceStep(raw) { const p = 10 ** Math.floor(Math.log10(raw || 1)); const n = raw / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; }
+
+/* ------------------------------------------------------------------ 대시보드 */
+/* ---- 자유 배치 보드: 12칸 그리드 위에서 카드를 어디로든 옮기고 크기를 조절한다 ----
+   카드마다 {x, y, w, h}(칸 단위). 겹치면 다른 카드가 아래로 밀려나고, 빈틈은 위로 붙는다(react-grid-layout 방식).
+   이동: 카드 머리글(⋮⋮ 포함)을 끌기 / 방향키(Shift+방향키는 크기). 크기: 오른쪽 아래 모서리. 배치는 브라우저에 저장한다. */
+const COLS = 12, GAP = 14, ROW = 28;
+const GRIP = '<button class="grip" type="button" title="끌어서 위치 이동 (키보드: 방향키, Shift+방향키는 크기)">⋮⋮</button>';
+function loadLayout() {
+  let l = null; try { l = JSON.parse(localStorage.getItem(LAYOUT_KEY)); } catch { /* 저장소 사용 불가: 기본 배치 */ }
+  return { items: l && typeof l.items === "object" && l.items ? l.items : {} };
+}
+function saveLayout() { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(state.layout)); } catch { /* 이번 세션만 유지 */ } }
+state.observers = []; state.items = []; state.nodes = new Map();   // state.layout 은 업종 스크립트(LAYOUT_KEY)가 로드된 뒤 init 에서 읽는다
+
+const isNarrow = () => window.innerWidth < 900;                       // 좁은 화면은 세로 1열로 고정 (편집 불가)
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const collide = (a, b) => !(a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y);
+function metrics() { const cols = isNarrow() ? 1 : COLS; return { cols, px: ($("#board").clientWidth + GAP) / cols, py: ROW + GAP }; }
+function minOf(id) { return MIN_SIZE[state.nodes.get(id)?.dataset.kind] || [3, 5]; }
+
+/* KPI 카드(전월·당월)는 높이를 사용자가 정하지 않고 내용을 따른다: 좁아져 지표가 2줄로 넘어가면 그만큼 커지고, 넓어지면 다시 줄어든다.
+   변경이 있었는지를 반환한다 */
+function syncAutoHeights(list) {
+  const m = metrics(); let changed = false;
+  if (m.px * m.cols < 200) return false;                       // 보드가 숨겨졌거나 폭이 0이면 측정하지 않는다
+  for (const it of list) {
+    const node = state.nodes.get(it.id), kb = node && node.dataset.kind === "kpi" ? $(".kbody", node) : null;
+    if (!kb) continue;
+    node.style.width = it.w * m.px - GAP + "px";                 // 이 폭에서 실제로 줄바꿈된 상태의 높이를 잰다
+    const h = Math.max(MIN_SIZE.kpi[1], Math.ceil((kb.offsetHeight + 36 + GAP) / m.py));   // 36 = 카드 위아래 안쪽 여백
+    if (h !== it.h) { it.h = h; changed = true; }
+  }
+  return changed;
+}
+/* 배치 계산: fixed(끌고 있는 카드)는 제자리에 두고, 나머지를 위→아래·왼→오른 순으로 겹치지 않는 가장 위쪽에 놓는다.
+   자리가 막혀 아래로 밀려나야 하는 카드는, 같은 높이(또는 그 위)에서 옆으로 비킬 자리가 있으면 그쪽을 먼저 택한다 */
+function lowestFree(it, x, placed) {
+  const c = { ...it, x, y: 0 };
+  for (let hit; (hit = placed.find(p => collide(c, p)));) c.y = hit.y + hit.h;
+  return c.y;
+}
+function pack(list, fixed, cols) {
+  syncAutoHeights(list);
+  const placed = fixed ? [fixed] : [];
+  for (const it of list.filter(i => i !== fixed).sort((a, b) => a.y - b.y || a.x - b.x)) {
+    const y0 = it.y, x0 = clamp(it.x, 0, cols - it.w);
+    it.x = x0; it.y = lowestFree(it, x0, placed);
+    if (it.y > y0) {                                   // 밀려 내려가야 한다면 옆으로 비킬 수 있는지 본다
+      let best = null;
+      for (let x = 0; x <= cols - it.w; x++) {
+        if (x === x0) continue;
+        const y = lowestFree(it, x, placed);
+        if (y <= y0 && (!best || y < best.y || (y === best.y && Math.abs(x - x0) < Math.abs(best.x - x0)))) best = { x, y };
+      }
+      if (best) { it.x = best.x; it.y = best.y; }
+    }
+    placed.push(it);
+  }
+}
+/* 시작 시점의 배치(base)에 변경(patch)만 적용해 처음부터 다시 계산한다: 경로와 무관하고, 카드를 제자리로 돌리면 나머지도 원래대로 돌아온다 */
+function trialLayout(base, id, patch) {
+  const t = base.map(i => ({ ...i })), d = t.find(i => i.id === id);
+  Object.assign(d, patch); pack(t, d, COLS); state.items = t; return d;
+}
+
+/* 카드 크기·위치를 화면에 반영한다. skip 카드(끌고 있는 카드)는 포인터를 따라가므로 위치를 건드리지 않는다 */
+function applyItems(list, skip) {
+  if ($("#board").clientWidth < 200) return;                    // 숨겨진 창 등: 보이게 되면 ResizeObserver 가 다시 호출한다
+  const narrow = isNarrow(), m = metrics(), view = narrow ? list.map(i => ({ ...i, x: 0, w: 1 })) : list;
+  if (narrow) pack(view, null, 1);
+  else if (syncAutoHeights(view)) pack(view, null, COLS);
+  let bottom = 0;
+  for (const it of view) {
+    const node = state.nodes.get(it.id); if (!node) continue;
+    const w = it.w * m.px - GAP, h = it.h * m.py - GAP, resized = node.style.width !== w + "px" || node.style.height !== h + "px";
+    if (node !== skip) { node.style.left = it.x * m.px + "px"; node.style.top = it.y * m.py + "px"; }
+    node.style.width = w + "px"; node.style.height = h + "px";
+    if (resized) node.dispatchEvent(new Event("boxresize"));
+    bottom = Math.max(bottom, (it.y + it.h) * m.py - GAP);
+  }
+  $("#board").style.height = bottom + "px";
+}
+function persistLayout() {
+  for (const it of state.items) state.layout.items[it.id] = { x: it.x, y: it.y, w: it.w, h: it.h };
+  saveLayout();
+}
+/* 저장된 위치가 있으면 쓰고, 없는 카드는 기본 크기로 왼쪽 위부터 채운다 */
+function buildItems(ids) {
+  const saved = state.layout.items, cur = { x: 0, y: 0, rowH: 0 };
+  return ids.map(id => {
+    const s = saved[id];
+    if (s) return { id, x: s.x, y: s.y, w: s.w, h: s.h };
+    if (DEFAULT_LAYOUT[id]) { const [x, y, w, h] = DEFAULT_LAYOUT[id]; return { id, x, y, w, h, def: true }; }   // def: 기본 배치 (저장하지 않는 표시)
+    const [w, h] = DEFAULT_SIZE[state.nodes.get(id).dataset.kind];
+    if (cur.x + w > COLS) { cur.y += cur.rowH; cur.x = 0; cur.rowH = 0; }
+    const it = { id, x: cur.x, y: cur.y, w, h };
+    cur.x += w; cur.rowH = Math.max(cur.rowH, h); return it;
+  });
+}
+function mountBoxes(boxes) {
+  const board = $("#board"), cm = $("#msgs"), keepScroll = cm ? cm.scrollTop : 0;   // 채팅 카드를 떼었다 붙이면 스크롤이 0으로 돌아간다
+  board.innerHTML = ""; state.nodes = new Map(boxes);
+  boxes.forEach(([, n]) => board.appendChild(n));
+  state.items = buildItems(boxes.map(b => b[0]));
+  // 화면 폭에 따라 KPI 카드가 기본(6칸)보다 높아지면, 기본 배치인 아래 카드들을 같이 내려 서로 겹치지 않게 한다
+  // (겹치면 충돌 처리가 카드를 옆으로 밀어 기본 모양이 흐트러진다). 사용자가 저장한 배치는 건드리지 않는다.
+  syncAutoHeights(state.items);
+  const kpiBottom = Math.max(0, ...state.items.filter(i => state.nodes.get(i.id).dataset.kind === "kpi" && i.def).map(i => i.y + i.h));
+  if (kpiBottom > 6) state.items.forEach(i => { if (i.def && i.y >= 6) i.y += kpiBottom - 6; });
+  pack(state.items, null, COLS); applyItems(state.items);
+  if (cm) cm.scrollTop = keepScroll;
+}
+// 창 크기뿐 아니라 스크롤바 유무 등으로 보드 폭이 바뀔 때도 카드를 다시 맞춘다 (resize 이벤트는 스크롤바 변화에는 오지 않는다)
+let lastBoardW = 0;
+new ResizeObserver(() => { const w = $("#board").clientWidth; if (w && w !== lastBoardW) { lastBoardW = w; applyItems(state.items); } }).observe($("#board"));
+window.addEventListener("resize", () => { clearTimeout(window.__rz); window.__rz = setTimeout(() => applyItems(state.items), 60); });
+
+function makeBox(id, kind, title, inner) {
+  const box = el("div", { class: "card box", "data-id": id, "data-kind": kind, "data-title": title });
+  box.innerHTML = inner + '<span class="rz" title="끌어서 크기 조절"></span>';
+  const grip = $(".grip", box), item = () => state.items.find(i => i.id === id);
+  grip.setAttribute("aria-label", title + " 카드 (방향키로 이동, Shift+방향키로 크기)");
+
+  const trackPointer = (onMove, onEnd) => {            // 포인터가 카드 밖으로 나가도 끝까지 따라간다
+    const up = ev => { window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); onEnd(ev); };
+    window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
+  };
+
+  // 이동: 머리글(제목줄)을 잡고 끈다. 카드는 포인터를 자유롭게 따라가고, 점선 상자가 놓일 칸을 보여준다
+  box.addEventListener("pointerdown", e => {
+    if (e.button !== 0 || isNarrow() || !e.target.closest(".grip, .chart-head, .mhead") || e.target.closest("button:not(.grip), select, input, a")) return;
+    e.preventDefault(); if (!item()) return;
+    const base = state.items.map(i => ({ ...i })), w = item().w;
+    const r0 = box.getBoundingClientRect(), offX = e.clientX - r0.left, offY = e.clientY - r0.top, board = $("#board");
+    const ph = el("div", { class: "ph" }); board.appendChild(ph); box.classList.add("active");
+    let last = e, cell = null;
+    const update = () => {
+      const br = board.getBoundingClientRect(), m = metrics(), left = last.clientX - offX - br.left, top = last.clientY - offY - br.top;
+      box.style.left = left + "px"; box.style.top = top + "px";
+      const x = clamp(Math.round(left / m.px), 0, COLS - w), y = Math.max(0, Math.round(top / m.py));
+      if (!cell || x !== cell.x || y !== cell.y) { cell = { x, y }; trialLayout(base, id, cell); applyItems(state.items, box); }
+      const d = item();
+      Object.assign(ph.style, { left: d.x * m.px + "px", top: d.y * m.py + "px", width: d.w * m.px - GAP + "px", height: d.h * m.py - GAP + "px" });
+    };
+    const scroller = setInterval(() => { if (last.clientY < 70) scrollBy(0, -18); else if (last.clientY > innerHeight - 70) scrollBy(0, 18); else return; update(); }, 30);
+    update();
+    trackPointer(ev => { last = ev; update(); }, () => {
+      clearInterval(scroller); ph.remove(); box.classList.remove("active");
+      applyItems(state.items); persistLayout();
+    });
+  });
+
+  // 크기: 오른쪽 아래 모서리를 끌면 12칸 그리드에 맞춰 폭·높이가 바뀌고, 겹치는 카드는 밀려난다
+  const rz = $(".rz", box);
+  rz.addEventListener("pointerdown", e => {
+    if (e.button !== 0 || isNarrow()) return;
+    e.preventDefault(); e.stopPropagation(); if (!item()) return;
+    const base = state.items.map(i => ({ ...i })), start = item(), m0 = metrics(), sx = e.clientX, sy = e.clientY, sw = box.offsetWidth, sh = box.offsetHeight, [minW, minH] = minOf(id);
+    box.classList.add("active");
+    trackPointer(ev => {
+      const w = clamp(Math.round((sw + ev.clientX - sx + GAP) / m0.px), minW, COLS - start.x), h = clamp(Math.round((sh + ev.clientY - sy + GAP) / m0.py), minH, 60);
+      if (w !== item().w || h !== item().h) { trialLayout(base, id, { w, h }); applyItems(state.items); }
+    }, () => { box.classList.remove("active"); applyItems(state.items); persistLayout(); });
+  });
+
+  // 키보드: 방향키로 한 칸 이동, Shift+방향키로 크기 조절
+  grip.addEventListener("keydown", e => {
+    const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key], it = item();
+    if (!d || !it || isNarrow()) return; e.preventDefault();
+    const [minW, minH] = minOf(id);
+    if (e.shiftKey) { it.w = clamp(it.w + d[0], minW, COLS - it.x); it.h = clamp(it.h + d[1], minH, 60); }
+    else { it.x = clamp(it.x + d[0], 0, COLS - it.w); it.y = Math.max(0, it.y + d[1]); }
+    pack(state.items, it, COLS); applyItems(state.items); persistLayout(); grip.focus();
+  });
+  return box;
+}
+$("#layout-reset").onclick = () => { state.layout = { items: {} }; saveLayout(); renderDashboard(); toast("카드 배치를 처음 상태로 되돌렸어요"); };
+
+/* 채팅 카드는 대시보드를 다시 그려도(입력 저장·역할 전환 등) 대화가 사라지지 않도록 한 번만 만들어 재사용한다 */
+function ensureChatBox() {
+  if (state.chatBox) return state.chatBox;
+  const box = makeBox("chat", "chat", "AI 채팅", `<div class="chart-head"><div class="ttl">${GRIP}<h2>AI 채팅</h2></div><span class="chip">조회 전용</span></div>
+    <div class="chat-body"><div class="msgs" id="msgs" aria-live="polite"></div><div class="suggest" id="suggest"></div>
+    <div class="composer"><form id="chat-form" autocomplete="off"><input id="chat-input" type="text" placeholder="데이터에 대해 물어보세요" maxlength="500" aria-label="질문 입력">
+    <button class="btn primary" id="send" type="submit">보내기</button><button class="btn" id="stop" type="button" hidden>중단</button></form></div></div>`);
+  $("#chat-form", box).onsubmit = e => { e.preventDefault(); sendChat($("#chat-input", box).value); };
+  $("#stop", box).onclick = () => state.abort?.abort();
+  return state.chatBox = box;
+}
+function scrollMsgs() { const c = $("#msgs"); if (c) c.scrollTo({ top: c.scrollHeight, behavior: "smooth" }); }
+
+$("#year").onchange = e => { state.year = +e.target.value; renderDashboard(); };
+
+function renderLog(ul, logs) {
+  if (!logs.length) { ul.innerHTML = '<li class="empty">변경이력이 없어요</li>'; return; }
+  ul.innerHTML = logs.map(l => {
+    const f = FIELD_KO[l.field] || l.field, v = x => x == null ? "없음" : (VAL_KO[x] || (/^\d{5,}$/.test(x) ? Number(x).toLocaleString() : esc(x)));
+    const body = l.field === "신규 등록" ? `<b>신규 등록</b> ${esc(l.new_value)}` : `${f}: <s>${v(l.old_value)}</s> → <b>${v(l.new_value)}</b>`;
+    return `<li><div class="meta"><span>${esc(l.timestamp.slice(5, 16))}</span><span class="badge role">${esc(l.role)}</span><span>${TABLE_KO[l.table_name] || l.table_name} · ${esc(nameOf(l.table_name, l.record_id))}</span></div><div class="chg">${body}</div></li>`;
+  }).join("");
+}
+async function openLog() {
+  $("#log-modal").hidden = false; $("#scrim").hidden = false; $("#log-title").focus?.();
+  await loadFullLog();
+}
+async function loadFullLog() {
+  const t = $("#log-filter").value, q = new URLSearchParams({ limit: 200 });
+  if (t) q.set("table_name", t);
+  if (!$("#log-extra").hidden) [["by_role", "#log-role"], ["from_date", "#log-from"], ["to_date", "#log-to"]].forEach(([k, s]) => { if ($(s).value) q.set(k, $(s).value); });
+  const seq = state.logSeq = (state.logSeq || 0) + 1, r = await api(`/api/change-log?${q}`);
+  if (seq !== state.logSeq) return;                        // 필터를 연달아 바꾸면 늦게 온 이전 응답은 버린다
+  renderLog($("#log-full"), r.logs); $("#log-count").textContent = `최근 ${r.logs.length}건`;
+}
+$("#log-filter").onchange = $("#log-role").onchange = $("#log-from").onchange = $("#log-to").onchange = loadFullLog;
+$("#close-log").onclick = () => { $("#log-modal").hidden = true; $("#scrim").hidden = true; };
+
+/* ------------------------------------------------------------------ 채팅 */
+function renderSuggest() {
+  $("#suggest").innerHTML = suggestions().map(q => `<button type="button">${esc(q)}</button>`).join("");
+  $("#suggest").querySelectorAll("button").forEach(b => b.onclick = () => sendChat(b.textContent));
+  $("#suggest").hidden = false;
+}
+function resetChat(note) {
+  state.abort?.abort(); state.history = []; state.chatBusy = false;
+  $("#msgs").innerHTML = ""; addMsg("ai", `<p>안녕하세요, <b>${esc(state.role)}</b> 권한으로 조회할 수 있는 데이터에 대해 답해 드려요. 수치는 조회 결과만 근거로 하고, 데이터에 없는 이유는 추측하지 않아요.</p>${state.cfg?.scope_note ? `<p style="color:var(--muted);font-size:13px">${esc(state.cfg.scope_note)}</p>` : ""}${note ? `<p style="color:var(--muted);font-size:13px">${esc(note)}</p>` : ""}`);
+  renderSuggest(); setBusy(false);
+}
+function md(text) {
+  const t = String(text).replace(/\$\\rightarrow\$|\\rightarrow/g, "→").replace(/\\[()]/g, "");
+  const lines = t.split(/\r?\n/), out = []; let list = null;
+  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`([^`]+)`/g, "<code>$1</code>");
+  const close = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  const cells = ln => ln.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    if (/^\s*\|/.test(ln)) {                                   // 표 (모델이 행 사이에 빈 줄을 넣기도 해서 건너뛴다)
+      close(); const rows = [];
+      while (i < lines.length && (/^\s*\|/.test(lines[i]) || !lines[i].trim())) { if (lines[i].trim()) rows.push(lines[i]); i++; }
+      i--;
+      const body = rows.filter(r => !/^\s*\|?[\s:|-]+\|?\s*$/.test(r)).map(cells);
+      if (body.length) out.push(`<div class="tbl"><table><thead><tr>${body[0].map(c => `<th>${inline(c)}</th>`).join("")}</tr></thead><tbody>${body.slice(1).map(r => `<tr>${r.map(c => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`);
+      continue;
+    }
+    const h = ln.match(/^\s*#{1,6}\s+(.*)/), ul = ln.match(/^\s*[*\-•]\s+(.*)/), ol = ln.match(/^\s*\d+[.)]\s+(.*)/);
+    if (h) { close(); out.push(`<h4>${inline(h[1])}</h4>`); }
+    else if (ul || ol) { const kind = ul ? "ul" : "ol"; if (list !== kind) { close(); out.push(`<${kind}>`); list = kind; } out.push(`<li>${inline((ul || ol)[1])}</li>`); }
+    else if (!ln.trim()) close(); else { close(); out.push(`<p>${inline(ln.trim())}</p>`); }
+  }
+  close(); return out.join("");
+}
+function addMsg(kind, html, extraClass = "") {
+  const m = el("div", { class: `msg ${kind} ${extraClass}` }, html); $("#msgs").appendChild(m); scrollMsgs(); return m;
+}
+function setBusy(b) {
+  state.chatBusy = b; $("#send").hidden = b; $("#stop").hidden = !b; $("#chat-input").disabled = b;
+  document.querySelectorAll("#suggest button, .suggest.inline button").forEach(x => x.disabled = b);
+}
+
+/* 답변 안에 "다음에 물어볼 질문" 제안이 있으면 버튼으로 바꾼다 (원문 텍스트·번호·따옴표는 감추고 누르면 바로 그 질문을 보낸다).
+   데이터를 나열한 목록(예: "해운대상사: ...감소했습니다")과 구분하기 위해, 물음표로 끝나거나 "~해 주세요/주시겠어요" 같은
+   요청형 어미로 끝나는 항목만 제안으로 본다. */
+function isSuggestionLike(text) {
+  const t = text.trim();
+  if (!t || t.length > 200) return false;
+  // "...됩니다. 예를 들어 ...어떨까요?"처럼 안내 문장 뒤에 물음표가 붙은 두 문장짜리는 실제 제안이 아니라 서두이므로 뺀다.
+  if (/[.!][^.!?]*[?？]$/.test(t)) return false;
+  if (/[?？]$/.test(t)) return true;
+  // "~알려줘."처럼 반말이거나 "~해 주세요."처럼 마침표로 끝나는 요청·희망형 문장도 제안으로 본다 (전부 물음표로 끝나진 않는다).
+  // 데이터 사실 나열("...감소했습니다.")과는 어미가 확연히 다르므로, 요청·희망형 어미로 끝나는지만 본다.
+  return /(?:줘|줄래|주세요|주시겠(?:어요|습니까)?|싶(?:어요|으신가요|습니다|네요)?|부탁(?:드립니다|해요)?)\.?$/.test(t);
+}
+function cleanQuestionText(text) {
+  return text.trim().replace(/^[-*•]\s*|^\d+[.)]\s*/, "").replace(/^[“"]|[”"]$/g, "");
+}
+function makeSuggestBox(texts) {
+  const box = el("div", { class: "suggest inline" });
+  texts.forEach(raw => {
+    const clean = cleanQuestionText(raw);
+    const btn = el("button", { type: "button" }, esc(clean));
+    btn.onclick = () => sendChat(clean);
+    box.appendChild(btn);
+  });
+  return box;
+}
+function linkifySuggestions(node) {
+  // 답변 끝의 '근거: ...' 한 줄은 제안 목록 뒤에 붙어도 무시한다 (프롬프트 규칙: 마지막 줄에 근거 표기)
+  const kids = [...node.children].filter(c => !c.classList.contains("foot") && !(c.tagName === "P" && /^근거\s*:/.test(c.textContent.trim())));
+  if (!kids.length) return;
+  const last = kids[kids.length - 1];
+  if (last.tagName === "OL" || last.tagName === "UL") {
+    const items = [...last.children], prev = kids[kids.length - 2];
+    // "어떤 비교가 필요하신가요?" 바로 뒤의 짧은 목록은 선택지다 (예: "수익 규모가 큰 진료과 순으로 비교").
+    // 숫자가 든 항목은 조회 결과 나열이므로 선택지로 보지 않는다.
+    const choices = prev?.tagName === "P" && /[?？]$/.test(prev.textContent.trim()) &&
+      items.every(li => li.textContent.trim().length <= 60 && !/\d/.test(li.textContent));
+    if (items.length >= 2 && items.length <= 6 && (choices || items.every(li => isSuggestionLike(li.textContent)))) {
+      last.replaceWith(makeSuggestBox(items.map(li => li.textContent)));
+      return;
+    }
+  }
+  let i = kids.length - 1, run = [];                // 번호 없이 문장만 줄바꿈으로 나열된 경우 (각각 <p>)
+  while (i >= 0 && kids[i].tagName === "P" && isSuggestionLike(kids[i].textContent)) { run.unshift(kids[i]); i--; }
+  if (run.length >= 2 && run.length <= 6) {
+    run[0].parentNode.insertBefore(makeSuggestBox(run.map(p => p.textContent)), run[0]);
+    run.forEach(p => p.remove());
+  }
+}
+
+/* 단계 기반 진행 표시줄: 서버 이벤트가 바닥값을 올리고, 그 사이에는 경과 시간에 따라 천천히 차오른다. */
+class Progress {
+  constructor() {
+    this.node = el("div", { class: "progress", role: "progressbar", "aria-valuemin": 0, "aria-valuemax": 100, "aria-label": "답변 생성 진행률" },
+      `<div class="pmeta"><span class="lab">준비 중…</span><span class="el">0.0초</span></div><div class="track"><div class="fill"></div></div>
+       <div class="steps"><span data-s="analyze">질문 분석</span><span data-s="tool">데이터 조회</span><span data-s="write">답변 작성</span></div><div class="tools-done"></div>`);
+    $("#msgs").appendChild(this.node); scrollMsgs();
+    this.pct = 2; this.floor = 2; this.cap = 12; this.t0 = performance.now(); this.done = [];
+    this.timer = setInterval(() => this.tick(), 150); this.render();
+  }
+  event(ev) {
+    if (ev.type === "stage") { this.floor = Math.max(this.floor, ev.pct); this.cap = ev.step === "write" ? 96 : ev.pct + 32; this.lab(ev.label); this.step(ev.step); }
+    if (ev.type === "tool") { this.floor = Math.max(this.floor, ev.pct); this.cap = ev.pct + 8; this.lab(ev.label + "…"); this.step("tool"); this.tool = ev.label; }
+    if (ev.type === "stage" && ev.step === "write" && this.tool) { this.done.push(this.tool.replace(/ 중$/, "")); this.tool = null; $(".tools-done", this.node).textContent = "조회 완료: " + this.done.join(", "); }
+  }
+  lab(t) { $(".lab", this.node).textContent = t; }
+  step(s) { const order = ["analyze", "tool", "write"]; this.node.querySelectorAll(".steps span").forEach(sp => { const i = order.indexOf(sp.dataset.s), c = order.indexOf(s); sp.className = i < c ? "done" : i === c ? "on" : ""; }); }
+  tick() {
+    if (this.pct < this.floor) this.pct = this.floor;
+    else if (this.pct < this.cap) this.pct += Math.max(.12, (this.cap - this.pct) * .035);
+    this.render();
+  }
+  render() {
+    const p = Math.min(this.pct, 99.5); $(".fill", this.node).style.width = p + "%"; this.node.setAttribute("aria-valuenow", Math.round(p));
+    $(".el", this.node).textContent = ((performance.now() - this.t0) / 1000).toFixed(1) + "초";
+  }
+  finish(ok = true) {
+    clearInterval(this.timer);
+    if (ok) { $(".fill", this.node).style.width = "100%"; $(".lab", this.node).textContent = "완료"; this.step("done"); }
+    setTimeout(() => this.node.remove(), ok ? 450 : 0);
+  }
+}
+
+async function sendChat(text) {
+  text = (text || "").trim(); if (!text || state.chatBusy) return;
+  $("#suggest").hidden = true; addMsg("user", esc(text)); $("#chat-input").value = "";
+  setBusy(true); const prog = new Progress(); state.abort = new AbortController();
+  const roleAtSend = state.role; let answered = false;
+  try {
+    const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, signal: state.abort.signal,
+      body: JSON.stringify({ role: roleAtSend, message: text, history: state.history.slice(-6) }) });
+    if (!res.ok) throw new Error("서버 오류 (" + res.status + ")");
+    const reader = res.body.getReader(), dec = new TextDecoder(); let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i; while ((i = buf.indexOf("\n\n")) >= 0) {
+        const block = buf.slice(0, i); buf = buf.slice(i + 2);
+        const line = block.split("\n").find(l => l.startsWith("data:")); if (!line) continue;
+        const ev = JSON.parse(line.slice(5));
+        if (state.role !== roleAtSend) return;                       // 역할이 바뀌었으면 결과를 버린다
+        if (ev.type === "answer") { answered = true; prog.finish(true); showAnswer(ev, text); }
+        else if (ev.type === "error") { prog.finish(false); addMsg("ai", esc(ev.message), "err"); answered = true; }
+        else prog.event(ev);
+      }
+    }
+    if (!answered) { prog.finish(false); addMsg("ai", "응답을 받지 못했어요. 다시 시도해 주세요.", "err"); }
+  } catch (e) {
+    prog.finish(false);
+    if (e.name !== "AbortError") addMsg("ai", esc(e.message || "요청에 실패했어요"), "err"); else if (state.role === roleAtSend) addMsg("ai", "중단했어요.");
+  } finally { if (state.role === roleAtSend) { setBusy(false); $("#chat-input").focus(); } }
+}
+function showAnswer(ev, question) {
+  const denied = ev.tools.some(t => t.denied), names = [...new Set(ev.tools.map(t => TOOL_KO[t.name] || t.name))];
+  const foot = `<div class="foot">${names.map(n => `<span class="chip">${esc(n)}</span>`).join("")}${denied ? '<span class="chip denied">권한이 없는 정보는 조회하지 않았어요</span>' : ""}<span>${ev.elapsed}초</span></div>`;
+  const node = addMsg("ai", md(ev.text) + (names.length || denied ? foot : `<div class="foot"><span>${ev.elapsed}초</span></div>`));
+  linkifySuggestions(node); scrollMsgs();
+  state.history.push({ role: "user", content: question }, { role: "assistant", content: ev.text });
+}
+
+/* ------------------------------------------------------------------ 입력 서랍 */
+let formTab = null;
+const isDigits = s => /^-?\d[\d,]*$/.test(String(s).trim());
+function parseIntField(v, label, errs, key, { positive = false, required = true } = {}) {
+  const s = String(v ?? "").trim();
+  if (!s) { if (required) errs.push({ field: key, message: `${label}: 값을 입력해 주세요` }); return null; }
+  if (!isDigits(s)) { errs.push({ field: key, message: `${label}: 정수만 입력할 수 있습니다` }); return null; }
+  const n = Number(s.replace(/,/g, ""));
+  if (n < 0) { errs.push({ field: key, message: `${label}: 음수는 입력할 수 없습니다` }); return null; }
+  if (positive && n === 0) { errs.push({ field: key, message: `${label}: 1 이상이어야 합니다` }); return null; }
+  return n;
+}
+function openForms(tab) {
+  $("#ftabs").innerHTML = FORMS.map(([id, label, perm]) => {
+    const ok = formOk(perm);                                   // 폼별 쓰기 가능 여부는 업종 스크립트가 정한다
+    return `<button class="ftab" role="tab" data-t="${id}" ${ok ? "" : "disabled"} aria-selected="false" title="${ok ? "" : `현재 역할(${state.role})은 수정 권한이 없어요`}">${label}${ok ? "" : " (권한 없음)"}</button>`;
+  }).join("");
+  $("#ftabs").querySelectorAll(".ftab").forEach(b => b.onclick = () => renderForm(b.dataset.t));
+  const first = FORMS.find(([, , perm]) => formOk(perm));
+  $("#drawer").hidden = false; $("#scrim").hidden = false;
+  if (!first) { $("#fbody").innerHTML = `<div class="empty">현재 역할(${esc(state.role)})은 입력·수정 권한이 없어요.<br>열람은 대시보드와 채팅에서 할 수 있어요.</div>`; return; }
+  renderForm(tab && !$(`.ftab[data-t="${tab}"]`).disabled ? tab : first[0]);
+}
+function closeForms() { $("#drawer").hidden = true; if ($("#log-modal").hidden) $("#scrim").hidden = true; }
+$("#open-forms").onclick = () => openForms(formTab);
+$("#close-forms").onclick = closeForms;
+$("#scrim").onclick = () => { closeForms(); $("#log-modal").hidden = true; $("#scrim").hidden = true; };
+document.addEventListener("keydown", e => { if (e.key === "Escape") { closeForms(); $("#log-modal").hidden = true; $("#scrim").hidden = true; } });
+
+function showErrors(root, errs) {
+  root.querySelectorAll(".field").forEach(f => { f.classList.remove("invalid"); const e = $(".err", f); if (e) e.textContent = ""; });
+  const fe = $(".formerr", root); fe.hidden = true; fe.textContent = "";
+  const general = [];
+  for (const e of errs) {
+    const f = root.querySelector(`.field[data-f="${e.field}"]`);
+    if (f) { f.classList.add("invalid"); $(".err", f).textContent = e.message.replace(/^[^:]+:\s*/, ""); } else general.push(e.message);
+  }
+  if (general.length) { fe.hidden = false; fe.textContent = general.join(" / "); }
+  const bad = root.querySelector(".field.invalid input, .field.invalid select"); bad?.focus();
+}
+const field = (key, label, input, hint = "") => `<div class="field" data-f="${key}"><label for="f-${key}">${label}</label>${input}${hint ? `<div class="hint">${hint}</div>` : ""}<div class="err" role="alert"></div></div>`;
+const inp = (key, val = "", extra = "") => `<input id="f-${key}" name="${key}" type="text" inputmode="numeric" autocomplete="off" value="${esc(val)}" ${extra}>`;
+const dateInp = (key, val, extra = "") => `<input id="f-${key}" name="${key}" type="date" value="${esc(val)}" max="${state.lookups.today}" ${extra}>`;
+
+async function submitForm(root, method, url, body, okMsg) {
+  const btn = $("button[type=submit]", root); btn.disabled = true;
+  try {
+    const r = await api(url, { method, body: { role: state.role, ...body } });
+    toast(okMsg(r)); await refreshAll(); return r;
+  } catch (e) {
+    if (e.errors) showErrors(root, e.errors); else { showErrors(root, [{ field: "_form", message: e.message }]); }
+    return null;
+  } finally { btn.disabled = false; }
+}
+async function refreshAll() { await loadDashboard(); if (!$("#log-modal").hidden) loadFullLog(); }
+
+/* ------------------------------------------------------------------ 시작 / 역할 전환 */
+$("#role").onchange = async e => {
+  const prev = state.role; state.role = e.target.value;
+  closeForms();
+  try { await loadDashboard(); } catch (err) { toast(err.message); }
+  resetChat(`역할이 ${prev} → ${state.role}로 바뀌어 이전 대화는 지웠어요.`);
+};
+async function checkHealth() {
+  try { const h = await api("/api/health"); $("#health").className = "dot " + (h.ok ? "ok" : "bad"); $("#health-text").textContent = h.ok ? "AI 연결됨" : "AI 모델 미연결"; }
+  catch { $("#health").className = "dot bad"; $("#health-text").textContent = "서버 미응답"; }
+}
+</script>
+<!-- 업종 스크립트: 라벨·대시보드 카드·입력폼·추천 질문 (renderDashboard, renderForm, FORMS, formOk, TABLE_KO 등) -->
+<script src="/vertical/app.js"></script>
+<script>
+"use strict";
+(async function init() {
+  state.layout = loadLayout();
+  try {
+    const cfg = state.cfg = await api("/api/config");
+    document.title = cfg.title; $("#brand-title").textContent = cfg.title; $("#brand-sub").textContent = cfg.subtitle;
+    $("#role").innerHTML = cfg.roles.map(r => `<option>${esc(r)}</option>`).join(""); state.role = cfg.roles[0];
+    $("#log-filter").innerHTML = '<option value="">전체</option>' + Object.entries(TABLE_KO).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+    if (typeof LOG_FILTERS !== "undefined" && LOG_FILTERS) {          // 역할·기간 필터 (업종 스크립트가 켤 때만)
+      $("#log-role").innerHTML = '<option value="">모든 역할</option>' + cfg.roles.map(r => `<option>${esc(r)}</option>`).join("");
+      $("#log-extra").hidden = false;
+    }
+    if (cfg.footer) { $("#footnote").textContent = cfg.footer; $("#footnote").hidden = false; document.body.classList.add("has-footnote"); }
+    await loadDashboard();
+  } catch (e) { $("#board").innerHTML = `<div class="card notice">데이터를 불러오지 못했어요: ${esc(e.message)}</div>`; }
+  resetChat(); checkHealth(); setInterval(checkHealth, 30000);
+})();
+</script>
+</body>
+</html>

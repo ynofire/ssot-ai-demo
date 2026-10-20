@@ -1,0 +1,5 @@
+# 실행에 필요한 패키지 (Python 3.10 이상, 개발 PC에서 검증한 버전)
+fastapi==0.141.1
+uvicorn==0.52.2
+httpx==0.28.1
+pydantic==2.13.4
