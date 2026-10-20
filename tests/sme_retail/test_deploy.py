@@ -167,7 +167,7 @@ class _Client:
     def __init__(self, *responses):
         self.responses, self.bodies = list(responses), []
 
-    def post(self, url, json, headers):
+    def post(self, url, json, headers, timeout=None):
         self.bodies.append(json)
         return self.responses.pop(0)
 
@@ -199,3 +199,14 @@ def test_unrelated_400_is_not_swallowed(monkeypatch):
     with pytest.raises(RuntimeError):
         gemini.chat(c, MSG, chat.SCHEMAS)
     assert gemini._think == {"thinkingBudget": 0} and len(c.bodies) == 1                       # 재시도하지도, 설정을 끄지도 않는다
+
+
+def test_503_is_retried_then_succeeds_and_persistent_503_raises(monkeypatch):
+    monkeypatch.setattr(gemini, "_think", None)
+    monkeypatch.setattr(gemini.time, "sleep", lambda s: None)
+    c = _Client(_Resp(503, {}), _Resp(503, {}), _Resp(200, OK))
+    assert gemini.chat(c, MSG, chat.SCHEMAS)["content"] == "답" and len(c.bodies) == 3
+    c = _Client(_Resp(503, {}), _Resp(503, {}), _Resp(503, {}))
+    with pytest.raises(RuntimeError):
+        gemini.chat(c, MSG, chat.SCHEMAS)
+    assert len(c.bodies) == 3                                              # 무한 재시도하지 않는다

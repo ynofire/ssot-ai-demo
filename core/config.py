@@ -36,7 +36,7 @@ MAX_TOOL_RESULT_CHARS = 6000
 # LLM_PROVIDER=gemini 이면 Google AI Studio(Gemini API)를 쓴다. 키는 서버 환경변수로만 받는다 (저장소·프론트에 두지 않는다).
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-lite-latest")   # flash-latest 는 응답이 120초 넘게 걸렸고 lite 는 1.1초였다 (실측)
 # 답하기 전에 "생각"하는 시간을 줄이는 설정 (JSON). 생각이 켜진 채로는 호출 한 번이 1분 안팎이었다 (실측).
 # 모델이 이 설정을 거부하면 자동으로 빼고 다시 보낸다. 빈 문자열이면 보내지 않는다. 예: '{"thinkingLevel": "low"}'
 GEMINI_THINKING = os.environ.get("GEMINI_THINKING", '{"thinkingBudget": 0}')

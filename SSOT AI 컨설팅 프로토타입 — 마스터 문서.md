@@ -135,8 +135,9 @@ Sep 27, 2026 · @민준
 
 - **브랜치**: 이력 없는 orphan 브랜치. 병원용 코드·공시 PDF·병원 문서·개발용 백업 DB를 뺀 중소기업용(sme_retail)만 담는다. 공개 저장소에는 이 브랜치만 올린다 (`git push origin deploy/sme-demo:main`).
 - **호스팅**: GitHub Pages는 정적 파일만 서비스해서 파이썬 서버(FastAPI)를 못 돌리고, 정적 페이지에서 Gemini를 부르면 키가 노출된다. 그래서 저장소는 GitHub에 두고 실행은 Render 무료 웹 서비스(`render.yaml`)로 한다. 절차는 `배포_안내.md`.
-- **LLM**: `LLM_PROVIDER=gemini`이면 Google AI Studio(Gemini API)를 쓴다 (`core/gemini.py`, 기본 `gemini-flash-latest`, 환경변수 `GEMINI_MODEL`). 기본값은 로컬 Ollama라 기존 동작은 그대로다. 키는 서버 환경변수 `GEMINI_API_KEY`로만 받고 헤더로 보낸다. 모델이 돌려준 응답 조각(thoughtSignature 포함)은 그대로 다시 보내 함수 호출 이어가기를 유지한다.
+- **LLM**: `LLM_PROVIDER=gemini`이면 Google AI Studio(Gemini API)를 쓴다 (`core/gemini.py`, 기본 `gemini-flash-lite-latest`, 환경변수 `GEMINI_MODEL`). 기본값은 로컬 Ollama라 기존 동작은 그대로다. 키는 서버 환경변수 `GEMINI_API_KEY`로만 받고 헤더로 보낸다. 모델이 돌려준 응답 조각(thoughtSignature 포함)은 그대로 다시 보내 함수 호출 이어가기를 유지한다.
 - **읽기 전용**: `READ_ONLY=1`이면 채팅 외 모든 쓰기 요청(POST·PATCH·PUT·DELETE)을 서버가 403으로 막고, 프론트는 `/api/config`의 `read_only`를 보고 "데이터 입력" 버튼을 숨긴다. 무료 서버는 재시작 시점을 보장할 수 없어 "재시작하면 초기화" 방식 대신 선택했다. 입력폼 시연은 로컬 버전으로 한다.
 - **남용 방지**: `/api/chat`은 IP당 분당 5회, 전체 하루 150회로 제한한다(`CHAT_PER_IP_PER_MIN`, `CHAT_PER_DAY`, 서버 메모리 기준). 대화 이력은 최대 12개·항목당 2000자로 자른다. `/api/health`는 30초마다 불리므로 외부 API를 부르지 않고 키 설정 여부만 본다.
 - **검증**: 단위 테스트 119개(신규 11개: Gemini 변환·tool 이름 매핑·서명 재전송·채팅 루프 연동·읽기 전용·횟수 제한)와 일부러 코드를 망가뜨린 변이 4종 모두 통과/검출. 공개 모드로 서버를 띄워 입력 버튼 숨김·쓰기 403·키 없음 안내를 확인.
 - **미검증 (키가 필요)**: 실제 Gemini 응답으로 기존 채팅 시나리오(`tests/sme_retail/verify_real.py`)를 돌려보지 않았다. 요청·응답 형식은 문서 기준으로 짰고 가짜 응답으로만 검증했으므로, 첫 실호출에서 모델 이름·스키마 거부 같은 조정이 필요할 수 있다. 프롬프트와 재시도·검증 코드는 Gemma 4 e4b 기준으로 맞춘 것이라 Gemini에서 재확인이 필요하다. 확인 명령: `LLM_PROVIDER=gemini GEMINI_API_KEY=<키> python tests/sme_retail/verify_real.py 1` (무료 한도를 아끼려고 1회만).
+- **모델 선택 실측 (2026-10-20, 같은 키·같은 '안녕' 한 마디)**: `gemini-flash-latest`는 120초 제한을 두 번 다 넘겼고(실서버에서는 호출 1회가 57~110초, 한 번은 503) `gemini-flash-lite-latest`는 1.1~1.2초였다. 그래서 기본 모델을 lite로 바꿨다. 같은 키로 `gemini-3.8-flash` 등 3.x 계열도 목록에 있었지만 속도는 재보지 않았다. 503은 2초·5초 뒤 최대 2번 다시 시도하고, 호출 제한시간은 60초다. 생각(thinking) 설정(`GEMINI_THINKING`, 기본 budget 0)은 모델이 거부하면 자동으로 빼고 다시 보낸다.

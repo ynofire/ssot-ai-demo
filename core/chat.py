@@ -127,7 +127,7 @@ def run_chat(role, message, history=None):
     except httpx.HTTPStatusError as e:
         print(f"[llm] HTTP {e.response.status_code}: {e.response.text[:300]}")   # 서버 로그에만 남긴다 (키는 헤더라 포함되지 않음)
         yield {"type": "error", "message": "요청이 몰려 AI가 잠시 쉬고 있어요. 잠시 후 다시 시도해 주세요."
-               if e.response.status_code == 429 else f"AI 서비스 호출에 실패했어요 (HTTP {e.response.status_code})."}
+               if e.response.status_code in (429, 503) else f"AI 서비스 호출에 실패했어요 (HTTP {e.response.status_code})."}
     except httpx.HTTPError as e:
         yield {"type": "error", "message": f"AI 모델 서버에 연결하지 못했어요 ({type(e).__name__})."
                + (" Ollama가 실행 중인지 확인해 주세요." if LLM_PROVIDER == "ollama" else "")}

@@ -64,12 +64,17 @@ def from_response(data):
 def chat(client, messages, schemas):
     global _think
     body = to_request(messages, schemas, TEMPERATURE)
-    send = lambda: client.post(URL.format(model=GEMINI_MODEL), json=body,   # noqa: E731
+    send = lambda: client.post(URL.format(model=GEMINI_MODEL), json=body, timeout=60,   # noqa: E731
                                headers={"x-goog-api-key": GEMINI_API_KEY})  # 키는 헤더로만 (URL 에 넣으면 오류 메시지로 새 수 있다)
     if _think:
         body["generationConfig"]["thinkingConfig"] = _think
     t = time.time()
-    r = send()
+    for wait in (2, 5, None):                      # 503(과부하)은 잠깐 뒤 다시 시도한다 (실측: flash-latest 가 자주 밀렸다)
+        r = send()
+        if r.status_code != 503 or wait is None:
+            break
+        print(f"[gemini] 503, {wait}초 뒤 재시도", flush=True)
+        time.sleep(wait)
     if r.status_code == 400 and _think and "think" in r.text.lower():       # 이 모델이 생각 설정을 거부하면 빼고 다시 보낸다
         print(f"[gemini] thinkingConfig 거부됨, 설정 없이 재시도: {r.text[:200]}", flush=True)
         _think = None
