@@ -185,7 +185,7 @@ def test_thinking_config_is_sent_by_default(monkeypatch):
 
 def test_model_that_rejects_thinking_config_gets_retried_without_it(monkeypatch):
     monkeypatch.setattr(gemini, "_think", {"thinkingBudget": 0})
-    c = _Client(_Resp(400, {"error": {"message": "thinking_budget is not supported for this model"}}), _Resp(200, OK))
+    c = _Client(_Resp(400, {"error": {"message": "Request contains an invalid argument."}}), _Resp(200, OK))   # 실측 문구: 'thinking' 이 없다
     assert gemini.chat(c, MSG, chat.SCHEMAS)["content"] == "답"
     assert "thinkingConfig" not in c.bodies[1]["generationConfig"] and gemini._think is None    # 이후 호출에도 보내지 않는다
     c2 = _Client(_Resp(200, OK))
@@ -193,12 +193,12 @@ def test_model_that_rejects_thinking_config_gets_retried_without_it(monkeypatch)
     assert "thinkingConfig" not in c2.bodies[0]["generationConfig"]
 
 
-def test_unrelated_400_is_not_swallowed(monkeypatch):
+def test_400_that_persists_without_thinking_config_is_raised(monkeypatch):
     monkeypatch.setattr(gemini, "_think", {"thinkingBudget": 0})
-    c = _Client(_Resp(400, {"error": {"message": "Invalid JSON payload"}}))
+    c = _Client(_Resp(400, {"error": {"message": "Invalid JSON payload"}}), _Resp(400, {"error": {"message": "Invalid JSON payload"}}))
     with pytest.raises(RuntimeError):
         gemini.chat(c, MSG, chat.SCHEMAS)
-    assert gemini._think == {"thinkingBudget": 0} and len(c.bodies) == 1                       # 재시도하지도, 설정을 끄지도 않는다
+    assert gemini._think == {"thinkingBudget": 0} and len(c.bodies) == 2                       # 한 번 빼고 재시도했지만 또 400 이면 설정 탓이 아니다: 설정은 유지, 예외는 그대로
 
 
 def test_503_is_retried_then_succeeds_and_persistent_503_raises(monkeypatch):

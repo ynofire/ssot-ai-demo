@@ -37,9 +37,10 @@ MAX_TOOL_RESULT_CHARS = 6000
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-lite-latest")   # flash-latest 는 응답이 120초 넘게 걸렸고 lite 는 1.1초였다 (실측)
-# 답하기 전에 "생각"하는 시간을 줄이는 설정 (JSON). 생각이 켜진 채로는 호출 한 번이 1분 안팎이었다 (실측).
-# 모델이 이 설정을 거부하면 자동으로 빼고 다시 보낸다. 빈 문자열이면 보내지 않는다. 예: '{"thinkingLevel": "low"}'
-GEMINI_THINKING = os.environ.get("GEMINI_THINKING", '{"thinkingBudget": 0}')
+# 답하기 전에 "생각"하는 시간을 조절하는 설정 (JSON, 예: '{"thinkingLevel": "low"}'). 기본은 보내지 않는다 —
+# {"thinkingBudget": 0} 은 flash-lite 에서 400 "invalid argument" 였고(실측), lite 는 설정 없이도 1초대였다.
+# 설정했는데 모델이 400 으로 거부하면 자동으로 빼고 다시 보낸다.
+GEMINI_THINKING = os.environ.get("GEMINI_THINKING", "")
 # READ_ONLY=1 이면 /api/chat 외의 쓰기 요청(POST·PATCH 등)을 전부 막고 프론트의 입력 버튼을 숨긴다.
 READ_ONLY = os.environ.get("READ_ONLY", "") == "1"
 # 공개 링크에서 Gemini 무료 할당량이 바닥나지 않도록 채팅 횟수를 제한한다 (질문 1개 = 모델 호출 2~3회).

@@ -75,11 +75,12 @@ def chat(client, messages, schemas):
             break
         print(f"[gemini] 503, {wait}초 뒤 재시도", flush=True)
         time.sleep(wait)
-    if r.status_code == 400 and _think and "think" in r.text.lower():       # 이 모델이 생각 설정을 거부하면 빼고 다시 보낸다
-        print(f"[gemini] thinkingConfig 거부됨, 설정 없이 재시도: {r.text[:200]}", flush=True)
-        _think = None
+    if r.status_code == 400 and _think:             # 거절 문구에 'thinking' 이 없을 수도 있어서(실측) 400 이면 일단 빼고 다시 보낸다
+        print(f"[gemini] 400, thinkingConfig 없이 재시도: {r.text[:200]}", flush=True)
         body["generationConfig"].pop("thinkingConfig")
         r = send()
+        if r.status_code < 400:                     # 설정을 뺐더니 성공했다면 이 설정이 원인이다 -> 이후엔 보내지 않는다
+            _think = None
     r.raise_for_status()
     data = r.json()
     print(f"[gemini] {time.time() - t:.1f}s model={GEMINI_MODEL} usage={data.get('usageMetadata')}", flush=True)   # 호출별 시간·토큰 (키는 포함되지 않음)
