@@ -18,6 +18,6 @@ services:
       - key: READ_ONLY
         value: "1"
       - key: GEMINI_MODEL
-        value: gemini-2.5-flash
+        value: gemini-flash-latest
       - key: GEMINI_API_KEY
         sync: false
